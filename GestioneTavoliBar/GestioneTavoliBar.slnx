@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="src/GestioneTavoliBar.Api/GestioneTavoliBar.Api.csproj" />
+  <Project Path="src/GestioneTavoliBarUI/GestioneTavoliBarUI.esproj">
+    <Build />
+    <Deploy />
+  </Project>
+</Solution>

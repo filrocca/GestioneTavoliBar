@@ -1,0 +1,6 @@
+@GestioneTavoliBar.Api_HostAddress = http://localhost:5172
+
+GET {{GestioneTavoliBar.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
