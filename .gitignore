@@ -3,7 +3,7 @@
 ################################################################################
 
 /.vs
-
+.vs/
 # Build results
 [Dd]ebug/
 [Dd]ebugPublic/
@@ -19,7 +19,8 @@ bld/
 [Oo]bj/
 [Ll]og/
 [Ll]ogs/
-
+bin/
+obj/
 # .NET Core
 project.lock.json
 project.fragment.lock.json
