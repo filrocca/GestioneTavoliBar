@@ -1,0 +1,196 @@
+<div class="page">
+  <div class="page-header">
+    <div>
+      <h1>Gestione Tavoli</h1>
+      <p class="subtitle">
+        Monitora i tavoli e gestisci rapidamente occupazione e disponibilità.
+      </p>
+    </div>
+
+    <button class="refresh-btn" (click)="loadTables()">Aggiorna</button>
+  </div>
+
+  <div *ngIf="loading()" class="info-box">
+    Caricamento tavoli...
+  </div>
+
+  <div *ngIf="error()" class="info-box error-box">
+    {{ error() }}
+  </div>
+
+  <div *ngIf="actionMessage()" class="info-box success-box">
+    {{ actionMessage() }}
+  </div>
+
+  <div class="forms-grid">
+    <div class="form-card">
+      <h2>Crea tavolo</h2>
+
+      <label for="createCapacity">Capienza</label>
+      <input id="createCapacity"
+             type="number"
+             min="1"
+             [value]="createCapacity() ?? ''"
+             (input)="updateCreateCapacity($any($event.target).value)"
+             placeholder="Es. 4" />
+
+      <button class="primary-btn" (click)="onCreateTable()">Crea tavolo</button>
+    </div>
+
+    <div class="form-card">
+      <h2>Fai sedere persone</h2>
+
+      <label for="seatTableId">Tavolo</label>
+      <select id="seatTableId"
+              [value]="seatTableId() ?? ''"
+              (change)="updateSeatTableId($any($event.target).value)">
+        <option value="" disabled>Seleziona un tavolo</option>
+        <option *ngFor="let table of sortedTables()" [value]="table.id">
+          Tavolo {{ table.id }} — liberi: {{ getFreeSeats(table) }}
+        </option>
+      </select>
+
+      <label for="seatPeopleCount">Numero persone</label>
+      <input id="seatPeopleCount"
+             type="number"
+             min="1"
+             [value]="seatPeopleCount()"
+             (input)="updateSeatPeopleCount($any($event.target).value)" />
+
+      <button class="primary-btn" (click)="onSeatPeople()">Conferma posti</button>
+    </div>
+
+    <div class="form-card">
+      <h2>Fai alzare persone</h2>
+
+      <label for="leaveTableId">Tavolo</label>
+      <select id="leaveTableId"
+              [value]="leaveTableId() ?? ''"
+              (change)="updateLeaveTableId($any($event.target).value)">
+        <option value="" disabled>Seleziona un tavolo</option>
+        <option *ngFor="let table of sortedTables()" [value]="table.id">
+          Tavolo {{ table.id }} — occupati: {{ table.occupiedSeats }}
+        </option>
+      </select>
+
+      <label for="leavePeopleCount">Numero persone</label>
+      <input id="leavePeopleCount"
+             type="number"
+             min="1"
+             [value]="leavePeopleCount()"
+             (input)="updateLeavePeopleCount($any($event.target).value)" />
+
+      <button class="primary-btn dark-btn" (click)="onLeavePeople()">Conferma uscita</button>
+    </div>
+
+    <div class="form-card">
+      <h2>Suggerisci tavolo</h2>
+
+      <label for="assignPeopleCount">Numero persone</label>
+      <input id="assignPeopleCount"
+             type="number"
+             min="1"
+             [value]="assignPeopleCount()"
+             (input)="updateAssignPeopleCount($any($event.target).value)" />
+
+      <button class="primary-btn" (click)="onSuggestTable()">Suggerisci</button>
+
+      <div class="suggestion-box" *ngIf="assigning()">
+        Sto cercando la soluzione migliore...
+      </div>
+
+      <div class="suggestion-box" *ngIf="assignResult() as result">
+        <p>
+          <strong>Persone richieste:</strong> {{ result.requestedPeopleCount }}
+        </p>
+
+        <p>
+          <strong>Tipo assegnazione:</strong>
+          {{ result.isSplitRequired ? 'Split su più tavoli' : 'Tavolo singolo' }}
+        </p>
+
+        <p>
+          <strong>Tavoli suggeriti:</strong>
+          {{ getSuggestedTablesText() }}
+        </p>
+
+        <p>
+          <strong>Posti totali disponibili nella proposta:</strong>
+          {{ result.totalAvailableSeatsInSuggestion }}
+        </p>
+
+        <p *ngIf="result.message">
+          <strong>Messaggio:</strong> {{ result.message }}
+        </p>
+
+        <div class="suggested-table-list">
+          <div class="suggested-table-item" *ngFor="let table of result.suggestedTables">
+            <span><strong>Tavolo {{ table.id }}</strong></span>
+            <span>Capienza: {{ table.capacity }}</span>
+            <span>Occupati: {{ table.occupiedSeats }}</span>
+            <span>Liberi: {{ getFreeSeats(table) }}</span>
+          </div>
+        </div>
+
+        <div class="suggestion-actions">
+          <button class="primary-btn" (click)="confirmSuggestedAssignment()">
+            Conferma assegnazione
+          </button>
+
+          <button class="secondary-btn" (click)="clearSuggestedAssignment()">
+            Annulla
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-grid" *ngIf="!loading()">
+    <div class="table-card" *ngFor="let table of sortedTables()">
+      <div class="table-card-header">
+        <h3>Tavolo {{ table.id }}</h3>
+
+        <span class="status-badge"
+              [ngClass]="{
+            'status-free': getStatus(table) === 'Libero',
+            'status-partial': getStatus(table) === 'Parziale',
+            'status-full': getStatus(table) === 'Pieno'
+          }">
+          {{ getStatus(table) }}
+        </span>
+      </div>
+
+      <div class="table-info">
+        <p><strong>Capienza:</strong> {{ table.capacity }}</p>
+        <p><strong>Occupati:</strong> {{ table.occupiedSeats }}</p>
+        <p><strong>Posti liberi:</strong> {{ getFreeSeats(table) }}</p>
+      </div>
+
+      <div class="quick-actions">
+        <button class="mini-btn"
+                (click)="quickSeat(table.id, 1)"
+                [disabled]="!canSeat(table, 1)">
+          +1
+        </button>
+
+        <button class="mini-btn"
+                (click)="quickSeat(table.id, 2)"
+                [disabled]="!canSeat(table, 2)">
+          +2
+        </button>
+
+        <button class="mini-btn outline-btn"
+                (click)="quickLeave(table.id, 1)"
+                [disabled]="!canLeave(table, 1)">
+          -1
+        </button>
+
+        <button class="mini-btn outline-btn"
+                (click)="quickLeave(table.id, 2)"
+                [disabled]="!canLeave(table, 2)">
+          -2
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
