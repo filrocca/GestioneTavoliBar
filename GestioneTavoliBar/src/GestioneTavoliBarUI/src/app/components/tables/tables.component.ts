@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Table } from '../../models/table.model';
 import { TableService } from '../../services/table.service';
@@ -30,13 +30,55 @@ export class TablesComponent implements OnInit {
   assignPeopleCount = signal<number>(1);
   assignResult = signal<AssignTableResponse | null>(null);
   assigning = signal(false);
+  showAssignModal = signal(false);
+
+  selectedOverrideTableId = signal<number | null>(null);
+
+  showDeleteModal = signal(false);
+  tableToDelete = signal<Table | null>(null);
 
   sortedTables = computed(() =>
     [...this.tables()].sort((a, b) => a.id - b.id)
   );
 
+  totalTables = computed(() => this.tables().length);
+
+  totalCapacity = computed(() =>
+    this.tables().reduce((sum, table) => sum + table.capacity, 0)
+  );
+
+  totalOccupiedSeats = computed(() =>
+    this.tables().reduce((sum, table) => sum + table.occupiedSeats, 0)
+  );
+
+  totalFreeSeats = computed(() =>
+    this.tables().reduce((sum, table) => sum + this.getFreeSeats(table), 0)
+  );
+
+  compatibleOverrideTables = computed(() => {
+    const result = this.assignResult();
+
+    if (!result || result.isSplitRequired) {
+      return [];
+    }
+
+    return this.sortedTables().filter(
+      table => this.getFreeSeats(table) >= result.requestedPeopleCount
+    );
+  });
+
   ngOnInit(): void {
     this.loadTables();
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscapeKey(): void {
+    if (this.showAssignModal()) {
+      this.closeAssignModal();
+    }
+
+    if (this.showDeleteModal())
+      this.closeDeleteModal();
   }
 
   loadTables(showMessage = false): void {
@@ -97,6 +139,40 @@ export class TablesComponent implements OnInit {
         this.error.set('Errore durante la creazione del tavolo.');
       }
     });
+  }
+
+  confirmDeleteTable(): void {
+    const table = this.tableToDelete();
+
+    if (!table) {
+      this.error.set('Nessun tavolo selezionato per l’eliminazione.');
+      return;
+    }
+
+    this.error.set('');
+    this.actionMessage.set('');
+
+    this.tableService.deleteTable(table.id).subscribe({
+      next: () => {
+        this.actionMessage.set(`Tavolo ${table.id} eliminato con successo.`);
+        this.closeDeleteModal();
+        this.loadTables(true);
+      },
+      error: (err) => {
+        console.error('Errore eliminazione tavolo:', err);
+        this.error.set(`Impossibile eliminare il tavolo ${table.id}.`);
+      }
+    });
+  }
+
+  closeDeleteModal(): void {
+    this.tableToDelete.set(null);
+    this.showDeleteModal.set(false);
+  }
+
+  openDeleteModal(table: Table): void {
+    this.tableToDelete.set(table);
+    this.showDeleteModal.set(true);
   }
 
   onSeatPeople(): void {
@@ -161,16 +237,57 @@ export class TablesComponent implements OnInit {
     this.actionMessage.set('');
     this.assignResult.set(null);
     this.assigning.set(true);
+    this.showAssignModal.set(false);
+    this.selectedOverrideTableId.set(null);
 
     this.tableService.assignTable({ peopleCount }).subscribe({
       next: (result) => {
         this.assignResult.set(result);
         this.assigning.set(false);
+        this.showAssignModal.set(true);
+        this.selectedOverrideTableId.set(null);
       },
       error: (err) => {
         console.error('Errore suggerimento tavolo:', err);
         this.error.set('Impossibile ottenere un suggerimento di assegnazione.');
         this.assigning.set(false);
+      }
+    });
+  }
+
+  confirmSuggestedTableOnly(): void {
+    const result = this.assignResult();
+
+    if (!result || result.suggestedTables.length === 0) {
+      this.error.set('Nessuna proposta di assegnazione valida da confermare.');
+      return;
+    }
+
+    const suggestedTableId = result.suggestedTables[0]?.id;
+
+    if (!suggestedTableId) {
+      this.error.set('Nessun tavolo suggerito disponibile.');
+      return;
+    }
+
+    this.error.set('');
+    this.actionMessage.set('');
+
+    this.tableService.seatPeople({
+      tableId: suggestedTableId,
+      peopleCount: result.requestedPeopleCount
+    }).subscribe({
+      next: () => {
+        this.actionMessage.set(`Assegnazione confermata sul tavolo suggerito ${suggestedTableId}.`);
+        this.assignResult.set(null);
+        this.assignPeopleCount.set(1);
+        this.selectedOverrideTableId.set(null);
+        this.showAssignModal.set(false);
+        this.loadTables(true);
+      },
+      error: (err) => {
+        console.error('Errore conferma tavolo suggerito:', err);
+        this.error.set('Errore durante la conferma del tavolo suggerito.');
       }
     });
   }
@@ -187,16 +304,23 @@ export class TablesComponent implements OnInit {
     this.actionMessage.set('');
 
     if (!result.isSplitRequired) {
-      const firstTable = result.suggestedTables[0];
+      const chosenTableId = this.selectedOverrideTableId();
+
+      if (chosenTableId === null) {
+        this.error.set('Seleziona un tavolo compatibile dal menu prima di confermare la variazione.');
+        return;
+      }
 
       this.tableService.seatPeople({
-        tableId: firstTable.id,
+        tableId: chosenTableId,
         peopleCount: result.requestedPeopleCount
       }).subscribe({
         next: () => {
-          this.actionMessage.set('Assegnazione singola confermata con successo.');
+          this.actionMessage.set(`Assegnazione confermata sul tavolo ${chosenTableId}.`);
           this.assignResult.set(null);
           this.assignPeopleCount.set(1);
+          this.selectedOverrideTableId.set(null);
+          this.showAssignModal.set(false);
           this.loadTables(true);
         },
         error: (err) => {
@@ -218,6 +342,8 @@ export class TablesComponent implements OnInit {
         this.actionMessage.set('Assegnazione split confermata con successo.');
         this.assignResult.set(null);
         this.assignPeopleCount.set(1);
+        this.selectedOverrideTableId.set(null);
+        this.showAssignModal.set(false);
         this.loadTables(true);
       },
       error: (err) => {
@@ -227,8 +353,14 @@ export class TablesComponent implements OnInit {
     });
   }
 
+  closeAssignModal(): void {
+    this.showAssignModal.set(false);
+  }
+
   clearSuggestedAssignment(): void {
     this.assignResult.set(null);
+    this.selectedOverrideTableId.set(null);
+    this.showAssignModal.set(false);
   }
 
   quickSeat(tableId: number, peopleCount: number): void {
@@ -287,6 +419,10 @@ export class TablesComponent implements OnInit {
     this.assignPeopleCount.set(value ? Number(value) : 1);
   }
 
+  updateSelectedOverrideTableId(value: string): void {
+    this.selectedOverrideTableId.set(value ? Number(value) : null);
+  }
+
   getFreeSeats(table: Table): number {
     return table.capacity - table.occupiedSeats;
   }
@@ -315,5 +451,15 @@ export class TablesComponent implements OnInit {
     return result.suggestedTables
       .map(table => `Tavolo ${table.id}`)
       .join(', ');
+  }
+
+  getAssignTypeLabel(): string {
+    const result = this.assignResult();
+
+    if (!result) {
+      return '';
+    }
+
+    return result.isSplitRequired ? 'Split' : 'Singolo';
   }
 }

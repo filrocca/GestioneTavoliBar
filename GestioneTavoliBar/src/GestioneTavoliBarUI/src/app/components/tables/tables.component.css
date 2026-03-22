@@ -241,3 +241,162 @@
   background: white;
   border: 1px solid #e5e7eb;
 }
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1000;
+}
+
+.modal-card {
+  width: 100%;
+  max-width: 560px;
+  background: white;
+  border-radius: 18px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.22);
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+  .modal-header h2 {
+    margin: 0;
+    font-size: 22px;
+  }
+
+.modal-body {
+  padding: 20px;
+}
+
+  .modal-body p {
+    margin: 10px 0;
+  }
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding: 18px 20px;
+  border-top: 1px solid #e5e7eb;
+  flex-wrap: wrap;
+}
+
+.icon-close-btn {
+  border: none;
+  background: transparent;
+  font-size: 20px;
+  cursor: pointer;
+  color: #475467;
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+
+  .icon-close-btn:hover {
+    background: #f3f4f6;
+  }
+
+.modal-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.assign-type-badge {
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+
+.assign-type-single {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.assign-type-split {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.dashboard-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 16px 18px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+}
+
+.dashboard-label {
+  display: block;
+  font-size: 13px;
+  color: #667085;
+  margin-bottom: 8px;
+}
+
+.dashboard-value {
+  font-size: 28px;
+  color: #111827;
+}
+
+.danger-btn {
+  background: #dc2626;
+  color: white;
+}
+
+  .danger-btn:hover:not(:disabled) {
+    background: #b91c1c;
+  }
+
+.override-box {
+  margin-top: 16px;
+  padding: 14px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+}
+
+  .override-box label {
+    display: block;
+    margin-bottom: 8px;
+    color: #344054;
+  }
+
+  .override-box select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border: 1px solid #d0d7de;
+    border-radius: 10px;
+    font-size: 14px;
+    background: white;
+  }
+
+.delete-modal-card {
+  max-width: 480px;
+}
+
+.delete-warning-text {
+  margin-top: 16px;
+  color: #b42318;
+  font-weight: 700;
+}

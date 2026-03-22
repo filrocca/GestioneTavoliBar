@@ -14,7 +14,6 @@ import { SplitSeatRequest } from '../models/split-seat-request.model';
 })
 export class TableService {
   private http = inject(HttpClient);
-
   private apiUrl = 'https://localhost:7252/api/tables';
 
   getTables(): Observable<Table[]> {
@@ -25,12 +24,16 @@ export class TableService {
     return this.http.post<Table>(this.apiUrl, request);
   }
 
-  seatPeople(request: SeatRequest): Observable<any> {
-    return this.http.post(`${this.apiUrl}/seat`, request);
+  deleteTable(tableId: number): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/${tableId}`);
   }
 
-  leavePeople(request: LeaveRequest): Observable<any> {
-    return this.http.post(`${this.apiUrl}/leave`, request);
+  seatPeople(request: SeatRequest): Observable<void> {
+    return this.http.post<void>(`${this.apiUrl}/seat`, request);
+  }
+
+  leavePeople(request: LeaveRequest): Observable<void> {
+    return this.http.post<void>(`${this.apiUrl}/leave`, request);
   }
 
   assignTable(request: AssignTableRequest): Observable<AssignTableResponse> {

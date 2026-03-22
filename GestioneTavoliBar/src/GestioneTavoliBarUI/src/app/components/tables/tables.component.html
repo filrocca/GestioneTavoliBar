@@ -10,6 +10,28 @@
     <button class="refresh-btn" (click)="loadTables()">Aggiorna</button>
   </div>
 
+  <div class="dashboard-grid">
+    <div class="dashboard-card">
+      <span class="dashboard-label">Tavoli totali</span>
+      <strong class="dashboard-value">{{ totalTables() }}</strong>
+    </div>
+
+    <div class="dashboard-card">
+      <span class="dashboard-label">Posti totali</span>
+      <strong class="dashboard-value">{{ totalCapacity() }}</strong>
+    </div>
+
+    <div class="dashboard-card">
+      <span class="dashboard-label">Posti occupati</span>
+      <strong class="dashboard-value">{{ totalOccupiedSeats() }}</strong>
+    </div>
+
+    <div class="dashboard-card">
+      <span class="dashboard-label">Posti liberi</span>
+      <strong class="dashboard-value">{{ totalFreeSeats() }}</strong>
+    </div>
+  </div>
+
   <div *ngIf="loading()" class="info-box">
     Caricamento tavoli...
   </div>
@@ -98,50 +120,6 @@
       <div class="suggestion-box" *ngIf="assigning()">
         Sto cercando la soluzione migliore...
       </div>
-
-      <div class="suggestion-box" *ngIf="assignResult() as result">
-        <p>
-          <strong>Persone richieste:</strong> {{ result.requestedPeopleCount }}
-        </p>
-
-        <p>
-          <strong>Tipo assegnazione:</strong>
-          {{ result.isSplitRequired ? 'Split su più tavoli' : 'Tavolo singolo' }}
-        </p>
-
-        <p>
-          <strong>Tavoli suggeriti:</strong>
-          {{ getSuggestedTablesText() }}
-        </p>
-
-        <p>
-          <strong>Posti totali disponibili nella proposta:</strong>
-          {{ result.totalAvailableSeatsInSuggestion }}
-        </p>
-
-        <p *ngIf="result.message">
-          <strong>Messaggio:</strong> {{ result.message }}
-        </p>
-
-        <div class="suggested-table-list">
-          <div class="suggested-table-item" *ngFor="let table of result.suggestedTables">
-            <span><strong>Tavolo {{ table.id }}</strong></span>
-            <span>Capienza: {{ table.capacity }}</span>
-            <span>Occupati: {{ table.occupiedSeats }}</span>
-            <span>Liberi: {{ getFreeSeats(table) }}</span>
-          </div>
-        </div>
-
-        <div class="suggestion-actions">
-          <button class="primary-btn" (click)="confirmSuggestedAssignment()">
-            Conferma assegnazione
-          </button>
-
-          <button class="secondary-btn" (click)="clearSuggestedAssignment()">
-            Annulla
-          </button>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -190,7 +168,155 @@
                 [disabled]="!canLeave(table, 2)">
           -2
         </button>
+
+        <button class="mini-btn danger-btn"
+                (click)="openDeleteModal(table)">
+          Elimina
+        </button>
       </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay"
+     *ngIf="showAssignModal() && assignResult() as result"
+     (click)="closeAssignModal()">
+  <div class="modal-card" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title-wrap">
+        <h2>Proposta di assegnazione</h2>
+
+        <span class="assign-type-badge"
+              [ngClass]="{
+            'assign-type-single': !result.isSplitRequired,
+            'assign-type-split': result.isSplitRequired
+          }">
+          {{ getAssignTypeLabel() }}
+        </span>
+      </div>
+
+      <button class="icon-close-btn" (click)="closeAssignModal()">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <p>
+        <strong>Persone richieste:</strong> {{ result.requestedPeopleCount }}
+      </p>
+
+      <p>
+        <strong>Tipo assegnazione:</strong>
+        {{ result.isSplitRequired ? 'Split su più tavoli' : 'Tavolo singolo' }}
+      </p>
+
+      <p>
+        <strong>Tavoli suggeriti:</strong>
+        {{ getSuggestedTablesText() }}
+      </p>
+
+      <p>
+        <strong>Posti totali disponibili nella proposta:</strong>
+        {{ result.totalAvailableSeatsInSuggestion }}
+      </p>
+
+      <p *ngIf="result.message">
+        <strong>Messaggio:</strong> {{ result.message }}
+      </p>
+
+      <div class="suggested-table-list">
+        <div class="suggested-table-item" *ngFor="let table of result.suggestedTables">
+          <span><strong>Tavolo {{ table.id }}</strong></span>
+          <span>Capienza: {{ table.capacity }}</span>
+          <span>Occupati: {{ table.occupiedSeats }}</span>
+          <span>Liberi: {{ getFreeSeats(table) }}</span>
+        </div>
+      </div>
+
+      <div *ngIf="!result.isSplitRequired" class="override-box">
+        <p>
+          <strong>Tavolo suggerito dal sistema:</strong>
+          Tavolo {{ result.suggestedTables[0].id }}
+        </p>
+
+        <label for="overrideTableId">
+          <strong>Oppure scegli un altro tavolo compatibile</strong>
+        </label>
+
+        <select id="overrideTableId"
+                [value]="selectedOverrideTableId() ?? ''"
+                (change)="updateSelectedOverrideTableId($any($event.target).value)">
+          <option value="">Seleziona un tavolo compatibile...</option>
+
+          <option *ngFor="let table of compatibleOverrideTables()" [value]="table.id">
+            Tavolo {{ table.id }} — liberi: {{ getFreeSeats(table) }}
+          </option>
+        </select>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="primary-btn"
+              *ngIf="!result.isSplitRequired"
+              (click)="confirmSuggestedTableOnly()">
+        Conferma suggerito
+      </button>
+
+      <button class="secondary-btn"
+              *ngIf="!result.isSplitRequired"
+              (click)="confirmSuggestedAssignment()">
+        Conferma tavolo selezionato
+      </button>
+
+      <button class="primary-btn"
+              *ngIf="result.isSplitRequired"
+              (click)="confirmSuggestedAssignment()">
+        Conferma assegnazione
+      </button>
+
+      <button class="secondary-btn" (click)="clearSuggestedAssignment()">
+        Chiudi
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay"
+     *ngIf="showDeleteModal() && tableToDelete() as table"
+     (click)="closeDeleteModal()">
+  <div class="modal-card delete-modal-card" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title-wrap">
+        <h2>Conferma eliminazione</h2>
+      </div>
+
+      <button class="icon-close-btn" (click)="closeDeleteModal()">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <p>
+        Stai per eliminare il <strong>Tavolo {{ table.id }}</strong>.
+      </p>
+
+      <p>
+        <strong>Capienza:</strong> {{ table.capacity }}
+      </p>
+
+      <p>
+        <strong>Occupati:</strong> {{ table.occupiedSeats }}
+      </p>
+
+      <p class="delete-warning-text">
+        Questa operazione non può essere annullata.
+      </p>
+    </div>
+
+    <div class="modal-actions">
+      <button class="mini-btn danger-btn" (click)="confirmDeleteTable()">
+        Conferma eliminazione
+      </button>
+
+      <button class="secondary-btn" (click)="closeDeleteModal()">
+        Annulla
+      </button>
     </div>
   </div>
 </div>
