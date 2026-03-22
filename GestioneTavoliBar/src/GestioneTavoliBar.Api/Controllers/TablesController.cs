@@ -17,6 +17,7 @@ namespace GestioneTavoliBar.Api.Controllers
             _context = context; 
         }
 
+        //Metodo per l'aggiunta di un tavolo al DB
         [HttpPost]
         public async Task<ActionResult<Table>> AddTable(Table table)
         {
@@ -26,6 +27,7 @@ namespace GestioneTavoliBar.Api.Controllers
             return CreatedAtAction(nameof(GetTables), new { id = table.Id }, table);
         }
 
+        //Metodo che ritorna la lista di tutti i tavoli presenti nel DB
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Table>>> GetTables()
         {
@@ -33,6 +35,7 @@ namespace GestioneTavoliBar.Api.Controllers
             return Ok(tables);
         }
 
+        //Metodo che ritorna un tavolo specifico fornendone l'id. Se non presente ritorna not found
         [HttpGet("{id}")]
         public async Task<ActionResult<Table>> GetTable(int id)
         {
@@ -44,6 +47,7 @@ namespace GestioneTavoliBar.Api.Controllers
             return table;
         }
 
+        //Metodo per l'eliminazione di un tavolo dal DB
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteTable(int id)
         {
@@ -58,6 +62,7 @@ namespace GestioneTavoliBar.Api.Controllers
             return NoContent();
         }
 
+        //Metodo che gestisce l'assegnazione di un tavolo in funzione di N persone
         [HttpPost("assign")]
         public async Task<ActionResult<Table>> AssignTable([FromBody] AssignTableRequest request)
         {
@@ -72,19 +77,116 @@ namespace GestioneTavoliBar.Api.Controllers
                 .FirstOrDefaultAsync();
 
             if (emptyTable != null)
-                return Ok(emptyTable);
+                return Ok(new AssignTableResponse
+                {
+                    IsSplitRequired = false,
+                    Message = "Tavolo singolo disponibile.",
+                    RequestedPeopleCount = request.PeopleCount,
+                    TotalAvailableSeatsInSuggestion = emptyTable.Capacity - emptyTable.OccupiedSeats,
+                    SuggestedTables = new List<Table> { emptyTable }
+                });
 
             //2. Cerca tavoli parzialmente occupati
-            var partialTable = _context.Tables
+            var partialTable = await _context.Tables
                 .Where(table => table.OccupiedSeats > 0 && table.OccupiedSeats < table.Capacity && (table.Capacity - table.OccupiedSeats) >= request.PeopleCount)
                 .OrderBy(table => (table.Capacity - table.OccupiedSeats))
                 .FirstOrDefaultAsync();
 
             if (partialTable != null)
-                return Ok(partialTable);
+                return Ok(new AssignTableResponse
+                {
+                    IsSplitRequired = false,
+                    Message = "Tavolo parzialmente occupato disponibile.",
+                    RequestedPeopleCount = request.PeopleCount,
+                    TotalAvailableSeatsInSuggestion = partialTable.Capacity - partialTable.OccupiedSeats,
+                    SuggestedTables = new List<Table> { partialTable }
+                });
 
-            //3. Nessun tavolo trovato
-            return NotFound("Non è stato possibile trovare un tavolo singolo per questo numero di persone");
+            //3. Prova a dividere su píù tavoli
+            var availableTables = await _context.Tables
+                .Where(table => (table.Capacity - table.OccupiedSeats) > 0)
+                .OrderBy(table => (table.Capacity - table.OccupiedSeats))
+                .ToListAsync();
+
+            var selectedTables = new List<Table>(); 
+            int accumulatedSeats = 0;
+
+            foreach (var table in availableTables)
+            {
+                selectedTables.Add(table);
+                accumulatedSeats += (table.Capacity - table.OccupiedSeats);
+
+                if (accumulatedSeats >= request.PeopleCount)
+                    break;
+            }
+
+            if(accumulatedSeats >= request.PeopleCount)
+            {
+                return Ok(new AssignTableResponse
+                {
+                    IsSplitRequired = true,
+                    Message = "Nessun tavolo singolo disponibile. Si propone la divisione del gruppo su più tavoli",
+                    RequestedPeopleCount = request.PeopleCount,
+                    TotalAvailableSeatsInSuggestion = accumulatedSeats,
+                    SuggestedTables = selectedTables
+                });
+            }
+
+            //4. Nessun tavolo trovato
+            return NotFound(new AssignTableResponse
+            {
+                IsSplitRequired = false,
+                Message = "Nessun posto libero sufficiente nel locale.",
+                RequestedPeopleCount = request.PeopleCount,
+                TotalAvailableSeatsInSuggestion = accumulatedSeats,
+                SuggestedTables = new List<Table>()
+            });
+        }
+
+        //Metodo che occupa il tavolo assegnato
+        [HttpPost("seat")]
+        public async Task<ActionResult<Table>> SeatPeople([FromBody] SeatPeopleRequest request)
+        {
+            if(request.PeopleCount <= 0)
+                return BadRequest("Il numero di persone deve essere maggiore di zero");
+
+            var table = await _context.Tables.FindAsync(request.TableId);
+
+            if (table == null)
+                return NotFound("Non è stato trovato il tavolo");
+
+            int availableSeats = table.Capacity - table.OccupiedSeats;
+
+            if (availableSeats < request.PeopleCount)
+                return BadRequest("I posti disponibili sono insufficienti");
+
+            table.OccupiedSeats += request.PeopleCount;
+
+            await _context.SaveChangesAsync();
+
+            return Ok(table);
+        }
+
+        //Metodo che si occupa di liberare dei posti sui tavoli
+        [HttpPost("leave")]
+        public async Task<ActionResult<Table>> LeaveTable([FromBody] LeaveTableRequest request)
+        {
+            if (request.PeopleCount <= 0)
+                return BadRequest("Il numero di persone deve essere maggiore di zero");
+
+            var table = await _context.Tables.FindAsync(request.TableId);
+
+            if (table == null)
+                return NotFound("Il tavolo non è stato trovato");
+
+            if (table.OccupiedSeats < request.PeopleCount)
+                return BadRequest("Non puoi far uscire più persone di quelle presenti al tavolo");
+
+            table.OccupiedSeats -= request.PeopleCount;
+
+            await _context.SaveChangesAsync();
+
+            return Ok(table);
         }
     }
 }
