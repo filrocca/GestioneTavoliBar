@@ -188,5 +188,69 @@ namespace GestioneTavoliBar.Api.Controllers
 
             return Ok(table);
         }
+
+        //Metodo che si occupa dello splitting di persone su più tavoli
+        [HttpPost("seat-split")]
+        public async Task<ActionResult<SplitSeatResponse>> SeatPeopleSplit([FromBody] SplitSeatRequest request)
+        {
+            if(request.PeopleCount <= 0)
+                return BadRequest("Il numero di persone deve essere maggiore di zero");
+
+            if (request.TableIds == null || request.TableIds.Count == 0)
+                return BadRequest("Devi specificare almeno un tavolo");
+
+            var tables = await _context.Tables
+                .Where(table => request.TableIds.Contains(table.Id))
+                .OrderBy(table => table.Id)
+                .ToListAsync();
+
+            if (tables.Count != request.TableIds.Count)
+                return BadRequest("Uno o più tavoli selezionati non esistono");
+
+            int totalAvailableSeats = tables.Sum(t => t.Capacity - t.OccupiedSeats);
+
+            if (totalAvailableSeats < request.PeopleCount)
+                return BadRequest("I tavoli selezionati non hanno posti sufficienti");
+
+            int remainingPeople = request.PeopleCount;
+            var allocations = new List<SplitSeatAllocationDto>();
+
+            foreach (var table in tables)
+            {
+                int availableSeats = table.Capacity - table.OccupiedSeats;
+
+                if (availableSeats <= 0)
+                    continue;
+
+                int peopleToAssign = Math.Min(availableSeats, remainingPeople);
+
+                if (peopleToAssign > 0)
+                {
+                    table.OccupiedSeats += peopleToAssign;
+                    remainingPeople -= peopleToAssign;
+
+                    allocations.Add(new SplitSeatAllocationDto
+                    {
+                        TableId = table.Id,
+                        AssignedPeopleCount = peopleToAssign
+                    });
+                }
+
+                if (remainingPeople == 0)
+                    break;
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new SplitSeatResponse
+            {
+                RequestedPeopleCount = request.PeopleCount,
+                RemainingPeopleCount = remainingPeople,
+                Allocations = allocations,
+                Message = remainingPeople == 0 
+                ? "Gruppo assegnato correttamente su più tavoli." 
+                : "Assegnazione parziale completata."
+            });
+        }
     }
 }
